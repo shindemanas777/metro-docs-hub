@@ -14,7 +14,190 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      document_assignments: {
+        Row: {
+          assigned_at: string | null
+          document_id: string | null
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          assigned_at?: string | null
+          document_id?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          assigned_at?: string | null
+          document_id?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_assignments_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_assignments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          category: string
+          created_at: string | null
+          deadline: string | null
+          description: string | null
+          extracted_text: string | null
+          file_size: number | null
+          file_type: string | null
+          file_url: string
+          id: string
+          malayalam_translation: string | null
+          priority: string | null
+          review_notes: string | null
+          status: string | null
+          summary: string | null
+          title: string
+          updated_at: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          deadline?: string | null
+          description?: string | null
+          extracted_text?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url: string
+          id?: string
+          malayalam_translation?: string | null
+          priority?: string | null
+          review_notes?: string | null
+          status?: string | null
+          summary?: string | null
+          title: string
+          updated_at?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          deadline?: string | null
+          description?: string | null
+          extracted_text?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          malayalam_translation?: string | null
+          priority?: string | null
+          review_notes?: string | null
+          status?: string | null
+          summary?: string | null
+          title?: string
+          updated_at?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          category: string
+          created_at: string | null
+          deadline: string | null
+          id: string
+          message: string
+          priority: string | null
+          read: boolean | null
+          recipient_id: string | null
+          title: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          deadline?: string | null
+          id?: string
+          message: string
+          priority?: string | null
+          read?: boolean | null
+          recipient_id?: string | null
+          title: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          deadline?: string | null
+          id?: string
+          message?: string
+          priority?: string | null
+          read?: boolean | null
+          recipient_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          department: string | null
+          email: string
+          id: string
+          name: string
+          role: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string | null
+          department?: string | null
+          email: string
+          id?: string
+          name: string
+          role: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string | null
+          department?: string | null
+          email?: string
+          id?: string
+          name?: string
+          role?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
