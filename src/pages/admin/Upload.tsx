@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Upload as UploadIcon, FileText, X, CheckCircle, User, Calendar } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,10 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import Layout from '@/components/shared/Layout';
-import { uploadDocument, mockUsers } from '@/data/mockData';
+import { DocumentService } from '@/services/documentService';
 
 const Upload = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     title: '',
     category: '',
@@ -24,7 +25,24 @@ const Upload = () => {
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
 
-  const employees = mockUsers.filter(user => user.role === 'employee' && user.active);
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        const employeesList = await DocumentService.getEmployees();
+        setEmployees(employeesList);
+      } catch (error) {
+        console.error('Error loading employees:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load employee list. Please try again.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    loadEmployees();
+  }, [toast]);
+
   const categories = [
     'Safety & Compliance',
     'Operations',
@@ -122,36 +140,55 @@ const Upload = () => {
     try {
       const userData = JSON.parse(localStorage.getItem('kmrl_user') || '{}');
       
-      const documentData = {
-        ...formData,
-        uploadedBy: userData.name,
-        fileUrl: `/docs/${selectedFile.name}`,
-        fileSize: selectedFile.size,
-        fileType: selectedFile.type
+      const uploadData = {
+        file: selectedFile,
+        title: formData.title,
+        category: formData.category,
+        description: formData.description,
+        priority: formData.priority,
+        deadline: formData.deadline,
+        uploadedBy: userData.id
       };
 
-      const newDocument = await uploadDocument(documentData);
+      const response = await DocumentService.uploadDocument(uploadData);
       
-      toast({
-        title: "Document Uploaded Successfully",
-        description: `${newDocument.title} has been uploaded and assigned to ${formData.assignedTo.length} employee(s).`,
-      });
+      if (response.success) {
+        // If employees are assigned, approve and assign the document
+        if (formData.assignedTo.length > 0) {
+          const employeeIds = formData.assignedTo.map(id => 
+            employees.find(emp => emp.id === id)?.id || id.toString()
+          );
+          await DocumentService.approveDocument(
+            response.document.id, 
+            employeeIds,
+            `Uploaded and directly assigned by ${userData.name}`
+          );
+        }
 
-      // Reset form
-      setSelectedFile(null);
-      setFormData({
-        title: '',
-        category: '',
-        description: '',
-        priority: 'medium',
-        assignedTo: [],
-        deadline: ''
-      });
+        toast({
+          title: "Document Uploaded Successfully",
+          description: `${formData.title} has been uploaded${formData.assignedTo.length > 0 ? ` and assigned to ${formData.assignedTo.length} employee(s)` : ' for admin review'}.`,
+        });
+
+        // Reset form
+        setSelectedFile(null);
+        setFormData({
+          title: '',
+          category: '',
+          description: '',
+          priority: 'medium',
+          assignedTo: [],
+          deadline: ''
+        });
+      } else {
+        throw new Error(response.message || 'Upload failed');
+      }
 
     } catch (error) {
+      console.error('Upload error:', error);
       toast({
         title: "Upload Failed",
-        description: "Failed to upload document. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to upload document. Please try again.",
         variant: "destructive",
       });
     } finally {

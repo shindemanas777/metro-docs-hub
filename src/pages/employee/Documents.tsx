@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Layout from '@/components/shared/Layout';
-import { getDocumentsForUser, mockDocuments } from '@/data/mockData';
+import { DocumentService } from '@/services/documentService';
 import { useToast } from '@/hooks/use-toast';
 
 const DocumentsList = () => {
@@ -22,7 +22,7 @@ const DocumentsList = () => {
     const loadDocuments = async () => {
       try {
         const userData = JSON.parse(localStorage.getItem('kmrl_user') || '{}');
-        const userDocs = await getDocumentsForUser(userData.id, 'employee');
+        const userDocs = await DocumentService.getApprovedDocumentsForUser(userData.id);
         setDocuments(userDocs);
       } catch (error) {
         console.error('Error loading documents:', error);
@@ -310,13 +310,9 @@ export const DocumentDetail = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const doc = mockDocuments.find(d => d.id === parseInt(id || '0'));
-    setDocument(doc);
-    setLoading(false);
-    
-    if (!doc) {
-      navigate('/employee/documents');
-    }
+    // For now, just navigate back since we don't have individual document fetch
+    // In a full implementation, you'd fetch the specific document by ID
+    navigate('/employee/documents');
   }, [id, navigate]);
 
   if (loading) {
