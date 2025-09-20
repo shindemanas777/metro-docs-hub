@@ -103,15 +103,14 @@ serve(async (req) => {
     try {
       // For now, we'll extract basic text. In a full implementation, you'd use pdf-parse
       const arrayBuffer = await file.arrayBuffer()
-      const uint8Array = new Uint8Array(arrayBuffer)
       
       // Basic text extraction - this is simplified
       // In production, you'd use a proper PDF parsing library
-      parsedText = `PDF content extracted from ${file.name} (${file.size} bytes)`
+      parsedText = `PDF content extracted from ${file.name} (${file.size} bytes). File type: ${file.type}. Uploaded at: ${new Date().toISOString()}`
       console.log('PDF parsing completed')
     } catch (parseError) {
       console.error('PDF parsing error:', parseError)
-      parsedText = 'Failed to extract text from PDF'
+      parsedText = `Failed to extract text from PDF: ${file.name}`
     }
 
     // Generate summary using Gemini API
@@ -151,6 +150,7 @@ serve(async (req) => {
     }
 
     // Save document metadata to database
+    console.log('Attempting to save document to database...')
     const { data: documentData, error: dbError } = await supabaseClient
       .from('documents')
       .insert({
@@ -160,7 +160,7 @@ serve(async (req) => {
         description,
         priority,
         deadline: deadline || null,
-        uploaded_by: uploadedBy,
+        uploaded_by: uploadedBy || null,
         file_type: file.type,
         file_size: file.size,
         extracted_text: parsedText,
@@ -171,8 +171,12 @@ serve(async (req) => {
       .single()
 
     if (dbError) {
-      console.error('Database error:', dbError)
-      return new Response(JSON.stringify({ error: 'Failed to save document metadata' }), {
+      console.error('Database error details:', JSON.stringify(dbError, null, 2))
+      return new Response(JSON.stringify({ 
+        error: 'Failed to save document metadata',
+        details: dbError.message,
+        code: dbError.code
+      }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
