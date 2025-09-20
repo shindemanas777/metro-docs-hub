@@ -14,7 +14,7 @@ interface Database {
           id: string
           title: string
           file_url: string
-          parsed_text: string | null
+          extracted_text: string | null
           summary: string | null
           status: string
           category: string
@@ -37,7 +37,7 @@ interface Database {
           uploaded_by?: string | null
           file_type?: string | null
           file_size?: number | null
-          parsed_text?: string | null
+          extracted_text?: string | null
           summary?: string | null
           status?: string
         }
@@ -122,7 +122,7 @@ serve(async (req) => {
         console.error('GEMINI_API_KEY not found')
         summary = 'Summary generation failed: API key not configured'
       } else {
-        const geminiResponse = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + geminiApiKey, {
+        const geminiResponse = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + geminiApiKey, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -163,7 +163,7 @@ serve(async (req) => {
         uploaded_by: uploadedBy,
         file_type: file.type,
         file_size: file.size,
-        parsed_text: parsedText,
+        extracted_text: parsedText,
         summary,
         status: 'pending'
       })

@@ -31,7 +31,7 @@ export interface Document {
   uploaded_by?: string;
   file_type?: string;
   file_size?: number;
-  parsed_text?: string;
+  extracted_text?: string;
   summary?: string;
   status: string;
   review_notes?: string;
