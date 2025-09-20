@@ -19,7 +19,7 @@ const Upload = () => {
     category: '',
     description: '',
     priority: 'medium',
-    assignedTo: [] as number[],
+    assignedTo: [] as string[],
     deadline: ''
   });
   const [uploading, setUploading] = useState(false);
@@ -96,7 +96,7 @@ const Upload = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleEmployeeToggle = (employeeId: number) => {
+  const handleEmployeeToggle = (employeeId: string) => {
     setFormData(prev => ({
       ...prev,
       assignedTo: prev.assignedTo.includes(employeeId)
@@ -155,12 +155,9 @@ const Upload = () => {
       if (response.success) {
         // If employees are assigned, approve and assign the document
         if (formData.assignedTo.length > 0) {
-          const employeeIds = formData.assignedTo.map(id => 
-            employees.find(emp => emp.id === id)?.id || id.toString()
-          );
           await DocumentService.approveDocument(
             response.document.id, 
-            employeeIds,
+            formData.assignedTo,
             `Uploaded and directly assigned by ${userData.name}`
           );
         }
@@ -177,7 +174,7 @@ const Upload = () => {
           category: '',
           description: '',
           priority: 'medium',
-          assignedTo: [],
+          assignedTo: [] as string[],
           deadline: ''
         });
       } else {

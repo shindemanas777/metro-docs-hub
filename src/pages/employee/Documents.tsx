@@ -85,7 +85,7 @@ const DocumentsList = () => {
       description: `Opening ${doc.title} in new window...`,
     });
     // In real implementation, this would open the actual PDF
-    window.open(doc.fileUrl, '_blank');
+    window.open(doc.file_url, '_blank');
   };
 
   if (loading) {
@@ -178,16 +178,16 @@ const DocumentsList = () => {
                       {doc.summary}
                     </p>
                     
-                    <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="w-3 h-3" />
-                        <span>{new Date(doc.uploadedAt).toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex items-center space-x-1">
-                        <User className="w-3 h-3" />
-                        <span>{doc.uploadedBy}</span>
-                      </div>
-                    </div>
+                     <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                       <div className="flex items-center space-x-1">
+                         <Calendar className="w-3 h-3" />
+                         <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                       </div>
+                       <div className="flex items-center space-x-1">
+                         <User className="w-3 h-3" />
+                         <span>Admin</span>
+                       </div>
+                     </div>
                     
                     {doc.priority && (
                       <Badge variant={getPriorityColor(doc.priority) as any} className="w-fit">
@@ -238,15 +238,15 @@ const DocumentsList = () => {
             
             {selectedDocument && (
               <div className="space-y-6">
-                {/* Document Info */}
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium">Uploaded by:</span> {selectedDocument.uploadedBy}
-                  </div>
-                  <div>
-                    <span className="font-medium">Date:</span> {new Date(selectedDocument.uploadedAt).toLocaleDateString()}
-                  </div>
-                </div>
+                 {/* Document Info */}
+                 <div className="grid grid-cols-2 gap-4 text-sm">
+                   <div>
+                     <span className="font-medium">Uploaded by:</span> Admin
+                   </div>
+                   <div>
+                     <span className="font-medium">Date:</span> {new Date(selectedDocument.created_at).toLocaleDateString()}
+                   </div>
+                 </div>
                 
                 {/* Summary Section */}
                 <div>
@@ -271,28 +271,28 @@ const DocumentsList = () => {
                     </div>
                   </div>
                   
-                  <div className="p-4 bg-accent/20 rounded-lg">
-                    {showTranslation ? (
-                      <p className="text-sm leading-relaxed" style={{ fontFamily: 'sans-serif' }}>
-                        {selectedDocument.malayalamTranslation}
-                      </p>
-                    ) : (
-                      <p className="text-sm leading-relaxed">
-                        {selectedDocument.summary}
-                      </p>
-                    )}
-                  </div>
+                   <div className="p-4 bg-accent/20 rounded-lg">
+                     {showTranslation ? (
+                       <p className="text-sm leading-relaxed" style={{ fontFamily: 'sans-serif' }}>
+                         {selectedDocument.malayalam_translation || 'Translation not available'}
+                       </p>
+                     ) : (
+                       <p className="text-sm leading-relaxed">
+                         {selectedDocument.summary}
+                       </p>
+                     )}
+                   </div>
                 </div>
                 
-                {/* Extracted Text Preview */}
-                <div>
-                  <h3 className="font-medium mb-3">Extracted Text (Preview)</h3>
-                  <div className="p-4 bg-muted/50 rounded-lg">
-                    <p className="text-sm text-muted-foreground">
-                      {selectedDocument.extractedText}
-                    </p>
-                  </div>
-                </div>
+                 {/* Extracted Text Preview */}
+                 <div>
+                   <h3 className="font-medium mb-3">Extracted Text (Preview)</h3>
+                   <div className="p-4 bg-muted/50 rounded-lg">
+                     <p className="text-sm text-muted-foreground">
+                       {selectedDocument.extracted_text || selectedDocument.parsed_text || 'Text extraction in progress...'}
+                     </p>
+                   </div>
+                 </div>
               </div>
             )}
           </DialogContent>
