@@ -126,14 +126,7 @@ const Upload = () => {
       return;
     }
 
-    if (formData.assignedTo.length === 0) {
-      toast({
-        title: "No Employees Assigned",
-        description: "Please assign the document to at least one employee.",
-        variant: "destructive",
-      });
-      return;
-    }
+    // Optional: Employee assignment can be done later during approval
 
     setUploading(true);
 
@@ -338,8 +331,15 @@ const Upload = () => {
               <CardDescription>Select employees who should have access to this document</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {employees.map(employee => (
+              {employees.length === 0 ? (
+                <div className="text-center py-8">
+                  <User className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No employees available</p>
+                  <p className="text-sm text-muted-foreground">Documents can be uploaded and assigned later during review</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {employees.map(employee => (
                   <motion.div
                     key={employee.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -366,13 +366,22 @@ const Upload = () => {
                       )}
                     </div>
                   </motion.div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
               
               {formData.assignedTo.length > 0 && (
                 <div className="mt-4 p-3 bg-success/10 rounded-lg">
                   <p className="text-sm text-success">
                     Document will be assigned to {formData.assignedTo.length} employee(s)
+                  </p>
+                </div>
+              )}
+              
+              {employees.length === 0 && (
+                <div className="mt-4 p-3 bg-info/10 rounded-lg">
+                  <p className="text-sm text-info">
+                    Document will be uploaded for admin review and can be assigned to employees later
                   </p>
                 </div>
               )}
