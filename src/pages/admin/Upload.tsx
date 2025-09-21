@@ -19,7 +19,7 @@ const Upload = () => {
     category: '',
     description: '',
     priority: 'medium',
-    assignedTo: [] as string[],
+    assignedTo: [] as number[],
     deadline: ''
   });
   const [uploading, setUploading] = useState(false);
@@ -96,7 +96,7 @@ const Upload = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleEmployeeToggle = (employeeId: string) => {
+  const handleEmployeeToggle = (employeeId: number) => {
     setFormData(prev => ({
       ...prev,
       assignedTo: prev.assignedTo.includes(employeeId)
@@ -167,11 +167,11 @@ const Upload = () => {
           category: '',
           description: '',
           priority: 'medium',
-          assignedTo: [] as string[],
+          assignedTo: [] as number[],
           deadline: ''
         });
       } else {
-        throw new Error(response.message || 'Upload failed');
+        throw new Error('Upload failed');
       }
 
     } catch (error) {

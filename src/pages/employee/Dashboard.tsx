@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Layout from '@/components/shared/Layout';
-import { mockDocuments, mockAlerts, getDocumentsForUser } from '@/data/mockData';
+import { mockAlerts } from '@/data/mockData';
+import { DocumentService } from '@/services/documentService';
 import { useNavigate } from 'react-router-dom';
 
 const EmployeeDashboard = () => {
@@ -17,7 +18,7 @@ const EmployeeDashboard = () => {
     const loadData = async () => {
       try {
         const userData = JSON.parse(localStorage.getItem('kmrl_user') || '{}');
-        const userDocs = await getDocumentsForUser(userData.id, 'employee');
+        const userDocs = await DocumentService.getDocumentsForUser(userData.id);
         setDocuments(userDocs);
       } catch (error) {
         console.error('Error loading documents:', error);
