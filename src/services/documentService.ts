@@ -95,14 +95,15 @@ export class DocumentService {
   // Method to upload a document using optimized flow
   static async uploadDocument(uploadData: DocumentUpload): Promise<{ success: boolean; document: Document }> {
     try {
-      const {
-        data: { user },
-        error: userError
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
+      // Check localStorage-based authentication
+      const token = localStorage.getItem('kmrl_token');
+      const userData = localStorage.getItem('kmrl_user');
+      
+      if (!token || !userData) {
         throw new Error('User not authenticated');
       }
+
+      const user = JSON.parse(userData);
 
       // Step 1: Create document record first
       const { data: documentData, error: docError } = await supabase
@@ -113,7 +114,7 @@ export class DocumentService {
           description: uploadData.description || '',
           priority: uploadData.priority || 'medium',
           deadline: uploadData.deadline || null,
-          uploaded_by: user.id,
+          uploaded_by: user.id || null,
           file_type: uploadData.file.type,
           file_size: uploadData.file.size,
           file_url: '', // Will be updated after upload
