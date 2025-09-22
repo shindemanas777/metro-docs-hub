@@ -38,7 +38,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    if (req.method === 'GET') {
+    if (req.method === 'GET' || req.method === 'POST') {
       // Get all active employees
       const { data: employees, error } = await supabaseClient
         .from('profiles')

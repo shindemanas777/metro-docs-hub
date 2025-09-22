@@ -92,13 +92,29 @@ const DocumentsList = () => {
     });
   };
 
-  const handleViewOriginal = (doc: any) => {
-    toast({
-      title: "Opening Document",
-      description: `Opening ${doc.title} in new window...`,
-    });
-    // In real implementation, this would open the actual PDF
-    window.open(doc.fileUrl, '_blank');
+  const handleViewOriginal = async (doc: any) => {
+    try {
+      // Get signed URL for secure document viewing
+      const signedUrl = await DocumentService.getDocumentSignedUrl(doc.id);
+      if (signedUrl) {
+        window.open(signedUrl, '_blank');
+      } else {
+        // Fallback to original URL
+        window.open(doc.fileUrl, '_blank');
+      }
+      toast({
+        title: "Opening Document",
+        description: `Opening ${doc.title} in new window...`,
+      });
+    } catch (error) {
+      console.error('Failed to get signed URL:', error);
+      // Fallback to original URL
+      window.open(doc.fileUrl, '_blank');
+      toast({
+        title: "Opening Document",
+        description: `Opening ${doc.title} in new window...`,
+      });
+    }
   };
 
   if (loading) {

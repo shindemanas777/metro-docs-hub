@@ -1,7 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
-// @deno-types="https://deno.land/x/pdf_parse@1.0.0/mod.d.ts"
-import pdfParse from "https://esm.sh/pdf-parse@1.1.1"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -55,158 +53,91 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient<Database>(
+    // Initialize Supabase client
+    const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const formData = await req.formData()
-    const file = formData.get('file') as File
-    const title = formData.get('title') as string
-    const category = formData.get('category') as string
-    const description = formData.get('description') as string
-    const priority = formData.get('priority') as string || 'medium'
-    const deadline = formData.get('deadline') as string
-    const uploadedBy = formData.get('uploaded_by') as string
-
-    if (!file || !title || !category) {
+    // Parse JSON body (no more FormData)
+    const { document_id, bucket, path, extracted_text } = await req.json()
+    
+    // Validate required fields
+    if (!document_id || !bucket || !path) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    console.log(`Processing document: ${title}, size: ${file.size}, type: ${file.type}`)
+    console.log(`Processing document AI analysis: ${document_id}`)
 
-    // Upload file to Supabase Storage
-    const fileName = `${Date.now()}-${file.name}`
-    const { data: uploadData, error: uploadError } = await supabaseClient.storage
-      .from('pdf')
-      .upload(fileName, file, {
-        contentType: file.type,
-        upsert: false
-      })
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError)
-      return new Response(JSON.stringify({ error: 'Failed to upload file' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
-    // Get public URL
-    const { data: urlData } = supabaseClient.storage
-      .from('pdf')
-      .getPublicUrl(fileName)
-
-    // Parse PDF text using pdf-parse
-    let parsedText = ''
-    try {
-      const arrayBuffer = await file.arrayBuffer()
-      const uint8Array = new Uint8Array(arrayBuffer)
-      
-      // Extract text using pdf-parse
-      const pdfData = await pdfParse(uint8Array)
-      parsedText = pdfData.text || 'No text could be extracted from this PDF'
-      
-      console.log('PDF parsing completed successfully')
-      console.log(`Extracted ${parsedText.length} characters from PDF`)
-    } catch (parseError) {
-      console.error('PDF parsing error:', parseError)
-      parsedText = `Failed to extract text from PDF: ${file.name}. Error: ${parseError.message}`
-    }
-
-    // Generate summary using Gemini API
+    // Generate summary using AI (Gemini) if we have extracted text
     let summary = ''
-    try {
+    
+    if (extracted_text && extracted_text.trim()) {
       const geminiApiKey = Deno.env.get('GEMINI_API_KEY')
-      if (!geminiApiKey) {
-        console.error('GEMINI_API_KEY not found')
-        summary = 'Summary generation failed: API key not configured'
-      } else {
-        const geminiResponse = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + geminiApiKey, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `Please analyze this document and provide a comprehensive summary including:
-                
-1. Document Type & Purpose
-2. Date of Issue (if mentioned)
-3. Issuing Authority/Organization
-4. Recipient/Addressee
-5. Key Information & Details
-6. Important Names & Designations
-7. Critical Deadlines or Action Items
-8. Overall Summary
-9. Malayalam Translation of Key Points (if applicable)
-
-Document Content:
-${parsedText}
-
-Please format the response in a clear, structured manner.`
-              }]
-            }]
+      if (geminiApiKey) {
+        try {
+          const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiApiKey}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{
+                  text: `Please provide a comprehensive summary of the following document. Focus on key points, important information, and actionable items. Make it concise but informative:\n\n${extracted_text.substring(0, 8000)}`
+                }]
+              }],
+              generationConfig: {
+                temperature: 0.7,
+                topK: 40,
+                topP: 0.95,
+                maxOutputTokens: 1024,
+              }
+            })
           })
-        })
-
-        if (geminiResponse.ok) {
-          const geminiData = await geminiResponse.json()
-          summary = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || 'Summary generation failed'
-          console.log('Gemini summary generated successfully')
-        } else {
-          console.error('Gemini API error:', await geminiResponse.text())
-          summary = 'Summary generation failed: API error'
+          
+          if (geminiResponse.ok) {
+            const geminiData = await geminiResponse.json()
+            summary = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
+            console.log('Gemini summary generated successfully')
+          } else {
+            console.error('Gemini API error:', await geminiResponse.text())
+          }
+        } catch (summaryError) {
+          console.error('Summary generation error:', summaryError)
         }
       }
-    } catch (summaryError) {
-      console.error('Summary generation error:', summaryError)
-      summary = 'Summary generation failed: Processing error'
     }
 
-    // Save document metadata to database
-    console.log('Attempting to save document to database...')
-    const { data: documentData, error: dbError } = await supabaseClient
+    // Update document record with extracted text and summary
+    const { data: document, error: dbError } = await supabaseClient
       .from('documents')
-      .insert({
-        title,
-        file_url: urlData.publicUrl,
-        category,
-        description,
-        priority,
-        deadline: deadline || null,
-        uploaded_by: uploadedBy || null,
-        file_type: file.type,
-        file_size: file.size,
-        extracted_text: parsedText,
-        summary,
-        status: 'pending'
+      .update({
+        extracted_text: extracted_text || '',
+        summary: summary,
+        updated_at: new Date().toISOString()
       })
+      .eq('id', document_id)
       .select()
       .single()
 
     if (dbError) {
-      console.error('Database error details:', JSON.stringify(dbError, null, 2))
-      return new Response(JSON.stringify({ 
-        error: 'Failed to save document metadata',
-        details: dbError.message,
-        code: dbError.code
-      }), {
+      console.error('Database update error:', dbError)
+      return new Response(JSON.stringify({ error: 'Database update failed' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    console.log('Document processed successfully:', documentData)
+    console.log('Document processed successfully:', document_id)
 
-    return new Response(JSON.stringify({
-      success: true,
-      document: documentData,
-      message: 'Document uploaded and processed successfully'
+    return new Response(JSON.stringify({ 
+      success: true, 
+      document,
+      message: 'Document processed successfully' 
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })

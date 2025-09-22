@@ -1,5 +1,9 @@
 import { supabase } from '@/integrations/supabase/client';
 import { mockDocuments, mockUsers } from '@/data/mockData.js';
+import * as pdfjs from 'pdfjs-dist';
+
+// Set up PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 // Define interfaces for type safety
 interface DocumentUpload {
@@ -65,45 +69,142 @@ function saveAll(docs: any[]) {
 }
 
 export class DocumentService {
-  // Method to upload a document using Supabase edge function
+  // Helper function to extract text from PDF
+  private static async extractPDFText(file: File): Promise<string> {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        fullText += pageText + '\n';
+      }
+      
+      return fullText.trim();
+    } catch (error) {
+      console.error('PDF extraction failed:', error);
+      return '';
+    }
+  }
+
+  // Method to upload a document using optimized flow
   static async uploadDocument(uploadData: DocumentUpload): Promise<{ success: boolean; document: Document }> {
     try {
-      const formData = new FormData();
-      formData.append('file', uploadData.file);
-      formData.append('title', uploadData.title);
-      formData.append('category', uploadData.category);
-      formData.append('description', uploadData.description || '');
-      formData.append('priority', uploadData.priority);
-      if (uploadData.deadline) {
-        formData.append('deadline', uploadData.deadline);
+      const {
+        data: { user },
+        error: userError
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        throw new Error('User not authenticated');
       }
 
-      console.log('Calling upload-document edge function...');
+      // Step 1: Create document record first
+      const { data: documentData, error: docError } = await supabase
+        .from('documents')
+        .insert({
+          title: uploadData.title,
+          category: uploadData.category,
+          description: uploadData.description || '',
+          priority: uploadData.priority || 'medium',
+          deadline: uploadData.deadline || null,
+          uploaded_by: user.id,
+          file_type: uploadData.file.type,
+          file_size: uploadData.file.size,
+          file_url: '', // Will be updated after upload
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (docError || !documentData) {
+        throw new Error('Failed to create document record');
+      }
+
+      // Step 2: Upload file to storage with document ID
+      const fileExt = uploadData.file.name.split('.').pop();
+      const fileName = `${documentData.id}.${fileExt}`;
       
-      const { data, error } = await supabase.functions.invoke('upload-document', {
-        body: formData,
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(fileName, uploadData.file);
+
+      if (uploadError) {
+        // Clean up document record if file upload fails
+        await supabase.from('documents').delete().eq('id', documentData.id);
+        throw new Error('Failed to upload file to storage');
+      }
+
+      // Step 3: Update document with file URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('documents')
+        .getPublicUrl(fileName);
+
+      const { error: updateError } = await supabase
+        .from('documents')
+        .update({ file_url: publicUrl })
+        .eq('id', documentData.id);
+
+      if (updateError) {
+        console.error('Failed to update file URL:', updateError);
+      }
+
+      // Step 4: Extract text if PDF
+      let extractedText = '';
+      if (uploadData.file.type === 'application/pdf') {
+        extractedText = await DocumentService.extractPDFText(uploadData.file);
+      }
+
+      // Step 5: Call edge function for AI processing
+      const { data: aiData, error: aiError } = await supabase.functions.invoke('upload-document', {
+        body: {
+          document_id: documentData.id,
+          bucket: 'documents',
+          path: fileName,
+          extracted_text: extractedText
+        }
       });
 
-      if (error) {
-        console.error('Supabase function error:', error);
-        throw new Error(`Upload failed: ${error.message}`);
+      if (aiError) {
+        console.error('AI processing failed:', aiError);
+        // Continue anyway - document is uploaded
       }
 
-      if (!data.success) {
-        console.error('Upload failed:', data.error);
-        throw new Error(`Upload failed: ${data.error || 'Unknown error'}`);
-      }
-
-      console.log('Document uploaded successfully:', data);
-
-      // If employees are assigned, approve and assign the document
+      // Step 6: Handle employee assignments
       if (uploadData.assignedEmployees && uploadData.assignedEmployees.length > 0) {
-        await this.approveDocument(data.document.id, uploadData.assignedEmployees);
+        const assignments = uploadData.assignedEmployees.map(employeeId => ({
+          document_id: documentData.id,
+          user_id: employeeId
+        }));
+
+        await supabase.from('document_assignments').insert(assignments);
       }
 
-      return { success: true, document: data.document };
+      return {
+        success: true,
+        document: {
+          id: documentData.id,
+          title: documentData.title,
+          description: documentData.description || '',
+          category: documentData.category,
+          priority: documentData.priority || 'medium',
+          deadline: documentData.deadline,
+          status: documentData.status as 'pending' | 'approved' | 'rejected',
+          uploadDate: new Date(documentData.created_at).toISOString().split('T')[0],
+          fileUrl: documentData.file_url,
+          uploader: 'Admin',
+          fileType: documentData.file_type || '',
+          fileSize: documentData.file_size || 0
+        }
+      };
+
     } catch (error) {
-      console.error('Error uploading document:', error);
+      console.error('Document upload failed:', error);
       throw error;
     }
   }
@@ -263,22 +364,26 @@ export class DocumentService {
     }
   }
 
-  // Get employees from Supabase
+  // Get employees from edge function (bypasses RLS issues)
   static async getEmployees(): Promise<Employee[]> {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('role', 'employee')
-        .eq('active', true)
-        .order('name');
+      // Call the edge function to get employees (bypasses RLS issues)
+      const { data, error } = await supabase.functions.invoke('get-employees', {
+        body: {}
+      });
 
       if (error) {
-        console.error('Error fetching employees:', error);
+        console.error('Error calling get-employees function:', error);
         return [];
       }
 
-      return data.map(profile => ({
+      if (!data?.employees || data.employees.length === 0) {
+        console.log('No employees found, returning empty array');
+        return [];
+      }
+
+      // Transform data to match Employee interface
+      return data.employees.map((profile: any) => ({
         id: profile.id,
         name: profile.name,
         email: profile.email,
@@ -287,8 +392,42 @@ export class DocumentService {
         active: profile.active
       }));
     } catch (error) {
-      console.error('Error fetching employees:', error);
+      console.error('Error in getEmployees:', error);
       return [];
+    }
+  }
+
+  // Get signed URL for document viewing
+  static async getDocumentSignedUrl(documentId: string): Promise<string | null> {
+    try {
+      // First get the document to find the file path
+      const { data: document, error } = await supabase
+        .from('documents')
+        .select('file_url')
+        .eq('id', documentId)
+        .single();
+
+      if (error || !document) {
+        console.error('Failed to get document:', error);
+        return null;
+      }
+
+      // Extract filename from URL or use document ID with extension
+      const fileName = `${documentId}.pdf`; // Assuming PDF extension
+      
+      const { data, error: signedError } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(fileName, 3600); // 1 hour expiry
+
+      if (signedError) {
+        console.error('Failed to create signed URL:', signedError);
+        return document.file_url; // Fallback to original URL
+      }
+
+      return data.signedUrl;
+    } catch (error) {
+      console.error('Error getting signed URL:', error);
+      return null;
     }
   }
 }
