@@ -19,7 +19,7 @@ const Upload = () => {
     category: '',
     description: '',
     priority: 'medium',
-    assignedTo: [] as number[],
+    assignedEmployees: [] as string[],
     deadline: ''
   });
   const [uploading, setUploading] = useState(false);
@@ -96,12 +96,12 @@ const Upload = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleEmployeeToggle = (employeeId: number) => {
+  const handleEmployeeToggle = (employeeId: string) => {
     setFormData(prev => ({
       ...prev,
-      assignedTo: prev.assignedTo.includes(employeeId)
-        ? prev.assignedTo.filter(id => id !== employeeId)
-        : [...prev.assignedTo, employeeId]
+      assignedEmployees: prev.assignedEmployees.includes(employeeId)
+        ? prev.assignedEmployees.filter(id => id !== employeeId)
+        : [...prev.assignedEmployees, employeeId]
     }));
   };
 
@@ -131,8 +131,6 @@ const Upload = () => {
     setUploading(true);
 
     try {
-      const userData = JSON.parse(localStorage.getItem('kmrl_user') || '{}');
-      
       const uploadData = {
         file: selectedFile,
         title: formData.title,
@@ -140,25 +138,23 @@ const Upload = () => {
         description: formData.description,
         priority: formData.priority,
         deadline: formData.deadline,
-        uploadedBy: userData.id
+        assignedEmployees: formData.assignedEmployees
       };
 
       const response = await DocumentService.uploadDocument(uploadData);
       
       if (response.success) {
-        // If employees are assigned, approve and assign the document
-        if (formData.assignedTo.length > 0) {
-          await DocumentService.approveDocument(
-            response.document.id, 
-            formData.assignedTo,
-            `Uploaded and directly assigned by ${userData.name}`
-          );
-        }
-
         toast({
           title: "Document Uploaded Successfully",
-          description: `${formData.title} has been uploaded${formData.assignedTo.length > 0 ? ` and assigned to ${formData.assignedTo.length} employee(s)` : ' for admin review'}.`,
+          description: `${formData.title} has been uploaded and is being processed. Text extraction and AI summary generation in progress.`,
         });
+
+        if (formData.assignedEmployees.length > 0) {
+          toast({
+            title: "Document Assigned",
+            description: `Document assigned to ${formData.assignedEmployees.length} employee(s).`,
+          });
+        }
 
         // Reset form
         setSelectedFile(null);
@@ -167,7 +163,7 @@ const Upload = () => {
           category: '',
           description: '',
           priority: 'medium',
-          assignedTo: [] as number[],
+          assignedEmployees: [] as string[],
           deadline: ''
         });
       } else {
@@ -345,7 +341,7 @@ const Upload = () => {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                      formData.assignedTo.includes(employee.id)
+                      formData.assignedEmployees.includes(employee.id)
                         ? 'bg-primary/10 border-primary'
                         : 'hover:bg-accent/50'
                     }`}
@@ -361,7 +357,7 @@ const Upload = () => {
                         <p className="font-medium text-sm">{employee.name}</p>
                         <p className="text-xs text-muted-foreground">{employee.department}</p>
                       </div>
-                      {formData.assignedTo.includes(employee.id) && (
+                      {formData.assignedEmployees.includes(employee.id) && (
                         <CheckCircle className="w-5 h-5 text-primary" />
                       )}
                     </div>
@@ -370,10 +366,10 @@ const Upload = () => {
                 </div>
               )}
               
-              {formData.assignedTo.length > 0 && (
+              {formData.assignedEmployees.length > 0 && (
                 <div className="mt-4 p-3 bg-success/10 rounded-lg">
                   <p className="text-sm text-success">
-                    Document will be assigned to {formData.assignedTo.length} employee(s)
+                    Document will be assigned to {formData.assignedEmployees.length} employee(s)
                   </p>
                 </div>
               )}

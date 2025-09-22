@@ -8,27 +8,40 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Layout from '@/components/shared/Layout';
 import { DocumentService } from '@/services/documentService';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 const DocumentsList = () => {
   const [documents, setDocuments] = useState<any[]>([]);
   const [selectedDocument, setSelectedDocument] = useState<any>(null);
-  const [showTranslation, setShowTranslation] = useState(false);
+  const [isTranslated, setIsTranslated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const [showExtractedText, setShowExtractedText] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    const loadDocuments = async () => {
+    const fetchDocuments = async () => {
       try {
-        const userData = JSON.parse(localStorage.getItem('kmrl_user') || '{}');
-        const userDocs = await DocumentService.getApprovedDocumentsForUser(userData.id);
-        setDocuments(userDocs);
+        // Get current authenticated user
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          toast({
+            title: "Error",
+            description: "Please log in to view documents",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
+        const docs = await DocumentService.getApprovedDocumentsForUser(user.id);
+        setDocuments(docs);
       } catch (error) {
-        console.error('Error loading documents:', error);
+        console.error('Error fetching documents:', error);
         toast({
           title: "Error",
-          description: "Failed to load documents. Please try again.",
+          description: "Failed to load documents",
           variant: "destructive",
         });
       } finally {
@@ -36,7 +49,7 @@ const DocumentsList = () => {
       }
     };
 
-    loadDocuments();
+    fetchDocuments();
   }, [toast]);
 
   const getStatusColor = (status: string) => {
@@ -68,14 +81,14 @@ const DocumentsList = () => {
 
   const handleViewDocument = (doc: any) => {
     setSelectedDocument(doc);
-    setShowTranslation(false);
+    setIsTranslated(false);
   };
 
   const handleTranslate = () => {
-    setShowTranslation(!showTranslation);
+    setIsTranslated(!isTranslated);
     toast({
-      title: showTranslation ? "Original Text" : "Malayalam Translation",
-      description: showTranslation ? "Showing original document summary" : "Document translated to Malayalam",
+      title: isTranslated ? "Original Text" : "Malayalam Translation",
+      description: isTranslated ? "Showing original document summary" : "Document translated to Malayalam",
     });
   };
 
@@ -85,7 +98,7 @@ const DocumentsList = () => {
       description: `Opening ${doc.title} in new window...`,
     });
     // In real implementation, this would open the actual PDF
-    window.open(doc.file_url, '_blank');
+    window.open(doc.fileUrl, '_blank');
   };
 
   if (loading) {
@@ -181,7 +194,7 @@ const DocumentsList = () => {
                      <div className="flex items-center space-x-4 text-xs text-muted-foreground">
                        <div className="flex items-center space-x-1">
                          <Calendar className="w-3 h-3" />
-                         <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                         <span>{doc.uploadDate}</span>
                        </div>
                        <div className="flex items-center space-x-1">
                          <User className="w-3 h-3" />
@@ -238,20 +251,20 @@ const DocumentsList = () => {
             
             {selectedDocument && (
               <div className="space-y-6">
-                 {/* Document Info */}
-                 <div className="grid grid-cols-2 gap-4 text-sm">
-                   <div>
-                     <span className="font-medium">Uploaded by:</span> Admin
-                   </div>
-                   <div>
-                     <span className="font-medium">Date:</span> {new Date(selectedDocument.created_at).toLocaleDateString()}
-                   </div>
-                 </div>
+                {/* Document Info */}
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium">Uploaded by:</span> Admin
+                  </div>
+                  <div>
+                    <span className="font-medium">Date:</span> {selectedDocument.uploadDate}
+                  </div>
+                </div>
                 
-                {/* Summary Section */}
-                <div>
+                {/* AI Summary Section */}
+                <div className="mb-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-medium">Document Summary</h3>
+                    <h4 className="font-semibold">AI Generated Summary</h4>
                     <div className="flex space-x-2">
                       <Button
                         size="sm"
@@ -259,7 +272,7 @@ const DocumentsList = () => {
                         onClick={handleTranslate}
                       >
                         <Languages className="w-4 h-4 mr-2" />
-                        {showTranslation ? "Show Original" : "Translate to Malayalam"}
+                        {isTranslated ? "Show Original" : "Translate to Malayalam"}
                       </Button>
                       <Button
                         size="sm"
@@ -271,28 +284,31 @@ const DocumentsList = () => {
                     </div>
                   </div>
                   
-                   <div className="p-4 bg-accent/20 rounded-lg">
-                     {showTranslation ? (
-                       <p className="text-sm leading-relaxed" style={{ fontFamily: 'sans-serif' }}>
-                         {selectedDocument.malayalam_translation || 'Translation not available'}
-                       </p>
-                     ) : (
-                       <p className="text-sm leading-relaxed">
-                         {selectedDocument.summary}
-                       </p>
-                     )}
-                   </div>
+                  <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+                    {isTranslated 
+                      ? (selectedDocument.malayalamTranslation || 'Malayalam translation not available')
+                      : (selectedDocument.summary || 'Summary not available')
+                    }
+                  </div>
                 </div>
                 
-                 {/* Extracted Text Preview */}
-                 <div>
-                   <h3 className="font-medium mb-3">Extracted Text (Preview)</h3>
-                   <div className="p-4 bg-muted/50 rounded-lg">
-                     <p className="text-sm text-muted-foreground">
-                       {selectedDocument.extracted_text || selectedDocument.parsed_text || 'Text extraction in progress...'}
-                     </p>
-                   </div>
-                 </div>
+                {/* Extracted Text Section */}
+                {selectedDocument.extractedText && (
+                  <div className="mb-4">
+                    <button
+                      onClick={() => setShowExtractedText(!showExtractedText)}
+                      className="flex items-center text-sm font-medium mb-2 hover:underline"
+                    >
+                      <FileText className="h-4 w-4 mr-1" />
+                      {showExtractedText ? 'Hide' : 'Show'} Extracted Text
+                    </button>
+                    {showExtractedText && (
+                      <div className="text-xs text-muted-foreground bg-muted/30 p-3 rounded-md max-h-48 overflow-y-auto">
+                        {selectedDocument.extractedText}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </DialogContent>

@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
+// @deno-types="https://deno.land/x/pdf_parse@1.0.0/mod.d.ts"
+import pdfParse from "https://esm.sh/pdf-parse@1.1.1"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -98,19 +100,21 @@ serve(async (req) => {
       .from('pdf')
       .getPublicUrl(fileName)
 
-    // Parse PDF text (simplified approach - in production you'd use proper PDF parsing)
+    // Parse PDF text using pdf-parse
     let parsedText = ''
     try {
-      // For now, we'll extract basic text. In a full implementation, you'd use pdf-parse
       const arrayBuffer = await file.arrayBuffer()
+      const uint8Array = new Uint8Array(arrayBuffer)
       
-      // Basic text extraction - this is simplified
-      // In production, you'd use a proper PDF parsing library
-      parsedText = `PDF content extracted from ${file.name} (${file.size} bytes). File type: ${file.type}. Uploaded at: ${new Date().toISOString()}`
-      console.log('PDF parsing completed')
+      // Extract text using pdf-parse
+      const pdfData = await pdfParse(uint8Array)
+      parsedText = pdfData.text || 'No text could be extracted from this PDF'
+      
+      console.log('PDF parsing completed successfully')
+      console.log(`Extracted ${parsedText.length} characters from PDF`)
     } catch (parseError) {
       console.error('PDF parsing error:', parseError)
-      parsedText = `Failed to extract text from PDF: ${file.name}`
+      parsedText = `Failed to extract text from PDF: ${file.name}. Error: ${parseError.message}`
     }
 
     // Generate summary using Gemini API
@@ -129,7 +133,22 @@ serve(async (req) => {
           body: JSON.stringify({
             contents: [{
               parts: [{
-                text: `Summarize this document and extract: date of issue, who issued it, to whom it is addressed, important details, important names, and any critical information. Document content: ${parsedText}`
+                text: `Please analyze this document and provide a comprehensive summary including:
+                
+1. Document Type & Purpose
+2. Date of Issue (if mentioned)
+3. Issuing Authority/Organization
+4. Recipient/Addressee
+5. Key Information & Details
+6. Important Names & Designations
+7. Critical Deadlines or Action Items
+8. Overall Summary
+9. Malayalam Translation of Key Points (if applicable)
+
+Document Content:
+${parsedText}
+
+Please format the response in a clear, structured manner.`
               }]
             }]
           })
